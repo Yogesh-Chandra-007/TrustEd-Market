@@ -53,13 +53,13 @@ function renderProductCard(productId, productData) {
         : 'https://images.unsplash.com/photo-1588514912908-8f5891714f8d?auto=format&fit=crop&w=500&q=80';
     
     // Use proper fallback values for every field
-    const name = products.name || "Untitled Product";
-    const description = products.description || "No description available.";
-    const price = products.price != null ? productData.price : 0;
-    const category = products.category || "N/A";
-    const status = products.status || "available";
-    const views = products.views != null ? productData.views : 0;
-    const messages = products.messages != null ? productData.messages : 0;
+    const name = productData.name || "Untitled Product";
+    const description = productData.description || "No description available.";
+    const price = productData.price != null ? productData.price : 0;
+    const category = productData.category || "N/A";
+    const status = productData.status || "available";
+    const views = productData.views != null ? productData.views : 0;
+    const messages = productData.messages != null ? productData.messages : 0;
 
     listingCard.innerHTML = `
         <div class="listing-badge ${status}">${status.charAt(0).toUpperCase() + status.slice(1)}</div>
@@ -92,4 +92,3 @@ function renderProductCard(productId, productData) {
     
     listingsGrid.appendChild(listingCard);
 }
-
