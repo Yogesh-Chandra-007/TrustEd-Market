@@ -1,74 +1,125 @@
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { app } from "./firebase.js";
+import { auth, db } from "./firebase-config.js";
+import { ref, get, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-const auth = getAuth(app);
-const db = getDatabase(app);
+let currentUser = null;
 
-// Wait for user login state
-onAuthStateChanged(auth, (user) => {
-    if (user) {
-        loadUserListings(user.uid);
-    } else {
-        console.log("No user signed in");
-        document.querySelector(".listings-grid").innerHTML = "<p>Please log in to see your listings.</p>";
-    }
-});
+// Initialize listings page
+export function initializeListingsPage() {
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            currentUser = user;
+            loadUserListings();
+        } else {
+            window.location.href = "login.html";
+        }
+    });
+}
 
-// Load user listings
-function loadUserListings(uid) {
-    const listingsRef = ref(db, `users/${uid}/listings`);
+// Load user's listings (references)
+function loadUserListings() {
+    const listingsRef = ref(db, `users/${currentUser.uid}/listings`);
 
     onValue(listingsRef, (snapshot) => {
         const listingsGrid = document.querySelector('.listings-grid');
         listingsGrid.innerHTML = '';
 
         if (!snapshot.exists()) {
-            listingsGrid.innerHTML = "<p>No listings yet.</p>";
+            listingsGrid.innerHTML = `
+                <div class="no-listings">
+                    <i class="fas fa-box-open"></i>
+                    <h3>No listings yet</h3>
+                    <p>You haven't listed any products for sale.</p>
+                    <button class="btn-primary" onclick="window.location.href='sell.html'">
+                        <i class="fas fa-plus"></i> List Your First Item
+                    </button>
+                </div>
+            `;
             return;
         }
 
         const listingsData = snapshot.val();
+        const productIds = Object.keys(listingsData);
 
-        Object.keys(listingsData).forEach(productId => {
-            const productData = listingsData[productId];
-            console.log("Loaded product:", productId, productData); // 🔎 Debug
-            renderProductCard(productId, productData);
+        // Load each product's full details
+        productIds.forEach(productId => {
+            loadProductDetails(productId);
         });
     });
+}
+
+// Load full product data from products/{productId}
+async function loadProductDetails(productId) {
+    const productRef = ref(db, `products/${productId}`);
+    try {
+        const snapshot = await get(productRef);
+
+        if (snapshot.exists()) {
+            const productData = snapshot.val();
+            renderProductCard(productId, productData);
+        } else {
+            // Product was removed, remove reference from user's listings
+            const listingRef = ref(db, `users/${currentUser.uid}/listings/${productId}`);
+            await remove(listingRef);
+        }
+    } catch (error) {
+        console.error("Error loading product:", error);
+    }
 }
 
 // Render product thumbnail card
 function renderProductCard(productId, productData) {
     const listingsGrid = document.querySelector('.listings-grid');
 
+    const firstImage = productData.images && productData.images.length > 0
+        ? productData.images[0]
+        : 'https://images.unsplash.com/photo-1588514912908-8f5891714f8d?auto=format&fit=crop&w=500&q=80';
+
     const card = document.createElement('div');
-    card.classList.add('listing-card');
+    card.className = 'listing-card';
     card.innerHTML = `
-        <div class="listing-thumbnail">
-            <img src="${productData.imageURL || 'assets/placeholder.png'}" alt="${productData.title}">
+        <div class="listing-badge ${productData.status || 'available'}">${productData.status || 'Available'}</div>
+        <div class="listing-image">
+            <img src="${firstImage}" alt="${productData.name}" 
+                 onerror="this.src='https://images.unsplash.com/photo-1588514912908-8f5891714f8d?auto=format&fit=crop&w=500&q=80'">
+            ${productData.images ? `<div class="image-count"><i class="fas fa-camera"></i> ${productData.images.length}</div>` : ''}
         </div>
         <div class="listing-info">
-            <h3>${productData.title || "Untitled"}</h3>
-            <p>${productData.description || "No description available."}</p>
-            <span class="price">₹${productData.price || 0}</span>
-            <small>${productData.location || "Unknown location"}</small>
+            <h3>${productData.name || "Untitled"}</h3>
+            <div class="listing-meta">
+                <span class="price">₹${productData.price || 0}</span>
+                <span class="category">${productData.category || "N/A"}</span>
+            </div>
+            <p class="description">${productData.description || "No description available."}</p>
+            <div class="listing-stats">
+                <div class="stat">
+                    <i class="fas fa-eye"></i> ${productData.views || 0} views
+                </div>
+                <div class="stat">
+                    <i class="fas fa-comment"></i> ${productData.messages || 0} messages
+                </div>
+            </div>
+            <div class="listing-actions">
+                <a href="pd.html?id=${productId}" class="btn-view">
+                    <i class="fas fa-eye"></i> View
+                </a>
+                ${productData.status === 'available' ? `
+                <button class="btn-edit" data-product-id="${productId}">
+                    <i class="fas fa-edit"></i> Edit
+                </button>
+                <button class="btn-mark-sold" data-product-id="${productId}">
+                    <i class="fas fa-check"></i> Mark Sold
+                </button>` : ''}
+                ${productData.status === 'sold' ? `
+                <button class="btn-relist" data-product-id="${productId}">
+                    <i class="fas fa-redo"></i> Relist
+                </button>` : ''}
+                <button class="btn-delete" data-product-id="${productId}">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
         </div>
     `;
 
-    // Open details page when clicked
-    card.addEventListener('click', () => {
-        openProductDetails(productId, productData);
-    });
-
     listingsGrid.appendChild(card);
-}
-
-// Open product details (modal or separate section)
-function openProductDetails(productId, productData) {
-    document.querySelector('#detailsTitle').textContent = productData.title || "Untitled";
-    document.querySelector('#detailsDescription').textContent = productData.description || "No description available.";
-    document.querySelector('#detailsPrice').textContent = `₹${productData.price || 0}`;
-    document.querySelector('#detailsLocation').textContent = productData.location || "Unknown location";
-    document.querySelector('#detailsCondition').textContent = productData.condition || "N/A";
 }
