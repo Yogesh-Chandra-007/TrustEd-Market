@@ -1,10 +1,10 @@
+// listings.js (simplified to read directly from user listings)
 import { auth, db } from "./firebase-config.js";
-import { ref, get, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { ref, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 let currentUser = null;
 
-// Initialize listings page
 export function initializeListingsPage() {
     onAuthStateChanged(auth, (user) => {
         if (user) {
@@ -16,14 +16,13 @@ export function initializeListingsPage() {
     });
 }
 
-// Load user's listings (references)
 function loadUserListings() {
     const listingsRef = ref(db, `users/${currentUser.uid}/listings`);
-
+    
     onValue(listingsRef, (snapshot) => {
         const listingsGrid = document.querySelector('.listings-grid');
         listingsGrid.innerHTML = '';
-
+        
         if (!snapshot.exists()) {
             listingsGrid.innerHTML = `
                 <div class="no-listings">
@@ -37,47 +36,24 @@ function loadUserListings() {
             `;
             return;
         }
-
+        
         const listingsData = snapshot.val();
-        const productIds = Object.keys(listingsData);
-
-        // Load each product's full details
-        productIds.forEach(productId => {
-            loadProductDetails(productId);
+        Object.keys(listingsData).forEach(productId => {
+            renderProductCard(productId, listingsData[productId]);
         });
     });
 }
 
-// Load full product data from products/{productId}
-async function loadProductDetails(productId) {
-    const productRef = ref(db, `products/${productId}`);
-    try {
-        const snapshot = await get(productRef);
-
-        if (snapshot.exists()) {
-            const productData = snapshot.val();
-            renderProductCard(productId, productData);
-        } else {
-            // Product was removed, remove reference from user's listings
-            const listingRef = ref(db, `users/${currentUser.uid}/listings/${productId}`);
-            await remove(listingRef);
-        }
-    } catch (error) {
-        console.error("Error loading product:", error);
-    }
-}
-
-// Render product thumbnail card
 function renderProductCard(productId, productData) {
     const listingsGrid = document.querySelector('.listings-grid');
-
-    const firstImage = productData.images && productData.images.length > 0
-        ? productData.images[0]
+    const listingCard = document.createElement('div');
+    listingCard.className = 'listing-card';
+    
+    const firstImage = productData.images && productData.images.length > 0 
+        ? productData.images[0] 
         : 'https://images.unsplash.com/photo-1588514912908-8f5891714f8d?auto=format&fit=crop&w=500&q=80';
-
-    const card = document.createElement('div');
-    card.className = 'listing-card';
-    card.innerHTML = `
+    
+    listingCard.innerHTML = `
         <div class="listing-badge ${productData.status || 'available'}">${productData.status || 'Available'}</div>
         <div class="listing-image">
             <img src="${firstImage}" alt="${productData.name}" 
@@ -85,41 +61,29 @@ function renderProductCard(productId, productData) {
             ${productData.images ? `<div class="image-count"><i class="fas fa-camera"></i> ${productData.images.length}</div>` : ''}
         </div>
         <div class="listing-info">
-            <h3>${productData.name || "Untitled"}</h3>
+            <h3>${productData.name}</h3>
             <div class="listing-meta">
-                <span class="price">₹${productData.price || 0}</span>
-                <span class="category">${productData.category || "N/A"}</span>
+                <span class="price">₹${productData.price}</span>
+                <span class="category">${productData.category}</span>
             </div>
-            <p class="description">${productData.description || "No description available."}</p>
+            <p class="description">${productData.description}</p>
             <div class="listing-stats">
-                <div class="stat">
-                    <i class="fas fa-eye"></i> ${productData.views || 0} views
-                </div>
-                <div class="stat">
-                    <i class="fas fa-comment"></i> ${productData.messages || 0} messages
-                </div>
+                <div class="stat"><i class="fas fa-eye"></i> ${productData.views || 0} views</div>
+                <div class="stat"><i class="fas fa-comment"></i> ${productData.messages || 0} messages</div>
             </div>
             <div class="listing-actions">
                 <a href="pd.html?id=${productId}" class="btn-view">
                     <i class="fas fa-eye"></i> View
                 </a>
                 ${productData.status === 'available' ? `
-                <button class="btn-edit" data-product-id="${productId}">
-                    <i class="fas fa-edit"></i> Edit
-                </button>
-                <button class="btn-mark-sold" data-product-id="${productId}">
-                    <i class="fas fa-check"></i> Mark Sold
-                </button>` : ''}
+                <button class="btn-edit" data-product-id="${productId}"><i class="fas fa-edit"></i> Edit</button>
+                <button class="btn-mark-sold" data-product-id="${productId}"><i class="fas fa-check"></i> Mark Sold</button>` : ''}
                 ${productData.status === 'sold' ? `
-                <button class="btn-relist" data-product-id="${productId}">
-                    <i class="fas fa-redo"></i> Relist
-                </button>` : ''}
-                <button class="btn-delete" data-product-id="${productId}">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
+                <button class="btn-relist" data-product-id="${productId}"><i class="fas fa-redo"></i> Relist</button>` : ''}
+                <button class="btn-delete" data-product-id="${productId}"><i class="fas fa-trash"></i> Delete</button>
             </div>
         </div>
     `;
-
-    listingsGrid.appendChild(card);
+    
+    listingsGrid.appendChild(listingCard);
 }
