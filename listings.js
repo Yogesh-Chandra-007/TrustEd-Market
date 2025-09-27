@@ -16,12 +16,12 @@ export function initializeListingsPage() {
 }
 
 function loadUserListings() {
-    const listingsRef = ref(db, `users/${currentUser.uid}/listings`);
-    
-    onValue(listingsRef, (snapshot) => {
+    const productsRef = ref(db, 'products');
+
+    onValue(productsRef, (snapshot) => {
         const listingsGrid = document.querySelector('.listings-grid');
         listingsGrid.innerHTML = '';
-        
+
         if (!snapshot.exists()) {
             listingsGrid.innerHTML = `
                 <div class="no-listings">
@@ -35,11 +35,28 @@ function loadUserListings() {
             `;
             return;
         }
-        
-        const listingsData = snapshot.val();
-        Object.keys(listingsData).forEach(productId => {
-            renderProductCard(productId, listingsData[productId]);
-        });
+
+        const allProducts = snapshot.val();
+
+        // Filter only products listed by current user
+        const userProducts = Object.keys(allProducts)
+            .filter(pid => allProducts[pid].sellerId === currentUser.uid);
+
+        if (userProducts.length === 0) {
+            listingsGrid.innerHTML = `
+                <div class="no-listings">
+                    <i class="fas fa-box-open"></i>
+                    <h3>No listings yet</h3>
+                    <p>You haven't listed any products for sale.</p>
+                    <button class="btn-primary" onclick="window.location.href='sell.html'">
+                        <i class="fas fa-plus"></i> List Your First Item
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        userProducts.forEach(productId => renderProductCard(productId, allProducts[productId]));
     });
 }
 
@@ -47,12 +64,12 @@ function renderProductCard(productId, productData) {
     const listingsGrid = document.querySelector('.listings-grid');
     const listingCard = document.createElement('div');
     listingCard.className = 'listing-card';
-    
-    const firstImage = productData.images && productData.images.length > 0 
-        ? productData.images[0] 
+
+    const firstImage = productData.images && productData.images.length > 0
+        ? productData.images[0]
         : 'https://images.unsplash.com/photo-1588514912908-8f5891714f8d?auto=format&fit=crop&w=500&q=80';
-    
-    // Use proper fallback values for every field
+
+    // Fallbacks for missing data
     const name = productData.name || "Untitled Product";
     const description = productData.description || "No description available.";
     const price = productData.price != null ? productData.price : 0;
@@ -89,6 +106,6 @@ function renderProductCard(productId, productData) {
             </div>
         </div>
     `;
-    
+
     listingsGrid.appendChild(listingCard);
 }
