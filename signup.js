@@ -56,7 +56,7 @@ const createUserInDB = async (user, additionalData = {}) => {
   if (!snapshot.exists()) {
     await set(userRef, {
       uid: user.uid,
-      fullName: additionalData.fullName || user.displayName || "Student",
+      name: additionalData.name || user.displayName || "Student", // Changed from fullName → name
       email: user.email,
       photoURL: user.photoURL || "",
       createdAt: serverTimestamp(),
@@ -94,7 +94,7 @@ signupForm?.addEventListener("submit", async (e) => {
 
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(userCredential.user, { displayName: name });
-    await createUserInDB(userCredential.user, { fullName: name });
+    await createUserInDB(userCredential.user, { name }); // Changed fullName → name
     showToast("Signup successful! Redirecting...", "success");
     await redirectUser(userCredential.user);
   } catch (err) {
