@@ -31,19 +31,17 @@ const inputYear = document.getElementById("inputYear");
 let isEditMode = false;
 let currentUser = null;
 
-// Show toast function
+// Show toast
 function showToast(message, type = "success") {
   toast.textContent = message;
   toast.className = "toast " + type + " show";
-  setTimeout(() => {
-    toast.className = "toast " + type;
-  }, 3000);
+  setTimeout(() => { toast.className = "toast " + type; }, 3000);
 }
 
 // Toggle profile menu
 function toggleProfileMenu() {
   const menu = document.getElementById("profileMenu");
-  menu.classList.toggle("active");
+  if (menu) menu.classList.toggle("active");
 }
 
 // Logout
@@ -56,11 +54,10 @@ function logout() {
 function toggleEditMode() {
   isEditMode = !isEditMode;
   const infoItems = document.querySelectorAll('.info-item');
-  
   infoItems.forEach(item => item.classList.toggle('edit-mode', isEditMode));
   editProfileBtn.style.display = isEditMode ? 'none' : 'flex';
   saveProfileBtn.style.display = isEditMode ? 'flex' : 'none';
-  
+
   if (!isEditMode) updateViewFromInputs();
 }
 
@@ -70,14 +67,14 @@ function updateViewFromInputs() {
   infoPhone.textContent = inputPhone.value;
   infoCollege.textContent = inputCollege.options[inputCollege.selectedIndex].text;
   infoCourse.textContent = inputCourse.value;
-  
+
   const yearText = inputYear.value === "1" ? "1st Year" :
                    inputYear.value === "2" ? "2nd Year" :
                    inputYear.value === "3" ? "3rd Year" : "4th Year";
   infoYear.textContent = yearText;
 }
 
-// Save profile
+// Save profile — ensure listings are never overwritten
 function saveProfile() {
   spinner.style.display = "block";
   const user = auth.currentUser;
@@ -93,6 +90,7 @@ function saveProfile() {
     updatedAt: Date.now()
   };
 
+  // Use update() at root level to prevent overwriting nested objects like listings
   update(ref(db, 'users/' + user.uid), updates)
     .then(() => {
       spinner.style.display = "none";
@@ -118,6 +116,7 @@ function loadUserData() {
     spinner.style.display = "none";
     if (snapshot.exists()) {
       const data = snapshot.val();
+      currentUser = user;
       profileName.textContent = data.name || user.displayName || "Student";
       profileCollege.textContent = data.college || "No college selected";
       coinsCount.textContent = data.coins || 0;
@@ -153,7 +152,7 @@ function loadUserData() {
   });
 }
 
-// Avatar preview
+// Avatar preview & save safely
 document.getElementById('avatar-upload').addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (file) {
@@ -161,6 +160,15 @@ document.getElementById('avatar-upload').addEventListener('change', function(e) 
     reader.onload = (event) => {
       profileAvatar.src = navProfileImg.src = event.target.result;
       showToast("Profile picture updated", "success");
+
+      const user = auth.currentUser;
+      if (user) {
+        // Only update top-level user info; listings are untouched
+        update(ref(db, 'users/' + user.uid), {
+          photoURL: event.target.result,
+          updatedAt: Date.now()
+        });
+      }
     }
     reader.readAsDataURL(file);
   }
@@ -177,33 +185,3 @@ window.toggleProfileMenu = toggleProfileMenu;
 window.logout = logout;
 window.toggleEditMode = toggleEditMode;
 window.saveProfile = saveProfile;
-
-// In profile.js, modify the avatar upload event listener
-document.getElementById('avatar-upload').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            // Update both profile and navigation images
-            profileAvatar.src = event.target.result;
-            
-            // Update navigation profile image across all pages
-            const navProfileImg = document.getElementById("navProfileImg");
-            if (navProfileImg) {
-                navProfileImg.src = event.target.result;
-            }
-            
-            showToast("Profile picture updated", "success");
-            
-            // Save to Firebase if user is logged in
-            const user = auth.currentUser;
-            if (user) {
-                update(ref(db, 'users/' + user.uid), {
-                    photoURL: event.target.result,
-                    updatedAt: Date.now()
-                });
-            }
-        }
-        reader.readAsDataURL(file);
-    }
-});
